@@ -1,0 +1,13 @@
+{
+  "type": "module",
+  "scripts": {
+    "test": "c8 node test/compare.js"
+  },
+  "dependencies": {
+    "@webreflection/magic-view": "^0.2.11"
+  },
+  "devDependencies": {
+    "@msgpack/msgpack": "^3.1.0",
+    "c8": "^10.1.3"
+  }
+}

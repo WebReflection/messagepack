@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script type="importmap">
+        {
+            "imports": {
+                "@webreflection/magic-view": "../node_modules/@webreflection/magic-view/src/index.js"
+            }
+        }
+    </script>
+    <script type="module">
+        import encoder from '../src/encoder.js';
+        const encode = encoder();
+        debugger;
+        encode([1, 2, 3]);
+    </script>
+</head>
+</html>
