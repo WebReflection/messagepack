@@ -49,8 +49,16 @@ assert(same(-0x80000001), 'number -0x80000001');
 assert(same(1.2), 'number 1.2');
 
 assert(same([1, 2, 3]), 'number[]');
+assert(same({test: 123}), 'object');
 
 let a = [1, 2, 3];
 a.unshift(a);
 a.push(a);
-console.log(local(a));
+console.log({ a: local(a) });
+
+let o = { test: 123 };
+console.log({ o: local(o) });
+
+a.push(o);
+o.a = a;
+console.log({ a: local(a) });

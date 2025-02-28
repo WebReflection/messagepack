@@ -11,6 +11,8 @@ const minimumBufferSize = 0xFFFF;
 const textEncoder = new TextEncoder;
 
 class Typed {
+  d = false;
+
   /** @type {Uint8Array?} */
   v = null;
 
@@ -21,11 +23,12 @@ class Typed {
 
   /** @type {Uint8Array} */
   get value() {
-    return /** @type {Uint8Array} */(this.v || this.r);
+    return this.d ? /** @type {Uint8Array} */(this.v) : this.r;
   }
 
   /** @param {Uint8Array} v */
   set value(v) {
+    this.d = true;
     this.v = v;
   }
 }
