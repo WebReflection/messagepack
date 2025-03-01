@@ -49,7 +49,11 @@ assert(same(-0x80000001), 'number -0x80000001');
 assert(same(1.2), 'number 1.2');
 
 assert(same([1, 2, 3]), 'number[]');
-assert(same({test: 123}), 'object');
+assert(same({ a: 1, b: 2, c: 3 }), 'object');
+
+assert(same(new Uint8Array([1, 2, 3])), 'view<ui8>');
+assert(same(new Uint16Array([1, 2, 3])), 'view<ui16>');
+assert(same(new Uint32Array([1, 2, 3])), 'view<ui32>');
 
 let a = [1, 2, 3];
 a.unshift(a);

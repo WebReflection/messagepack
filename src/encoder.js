@@ -1,6 +1,7 @@
 //@ts-check
 
 import { MagicView, BetterView } from '@webreflection/magic-view';
+import Typed from './typed.js';
 
 const { isArray } = Array;
 const { isView } = ArrayBuffer;
@@ -9,26 +10,6 @@ const { entries } = Object;
 
 const minimumBufferSize = 0xFFFF;
 const textEncoder = new TextEncoder;
-
-class Typed {
-  /** @type {Uint8Array?} */
-  v = null;
-
-  /** @param {Uint8Array} r */
-  constructor(r) {
-    this.r = r;
-  }
-
-  /** @type {Uint8Array} */
-  get value() {
-    return /** @type {Uint8Array} */(this.v || this.r);
-  }
-
-  /** @param {Uint8Array} v */
-  set value(v) {
-    this.v = v;
-  }
-}
 
 /**
  * @param {object} options
@@ -87,7 +68,7 @@ export default function ({
     }
     else {
       mv.setU8(size, 0xdd);
-      mv.setUint32(size, length, littleEndian);
+      mv.setUint32(size + 1, length, littleEndian);
     }
     let typed;
     if (recursion) typed = recursive(value, size);
@@ -214,12 +195,13 @@ export default function ({
       mv.setUint16(size + 1, length, littleEndian);
     } else {
       mv.setU8(size, 0xdf);
-      mv.setUint32(size, length, littleEndian);
+      mv.setUint32(size + 1, length, littleEndian);
     }
     let typed;
     if (recursion) typed = recursive(value, size);
     for (let size = 0, i = 0; i < length; i++) {
       const [key, value] = encoded[i];
+      // TODO: check recursive keys: I don't think this works
       if (recursion) {
         size = mv.size;
         typed = recursive(key, size);
@@ -239,7 +221,7 @@ export default function ({
    * @returns
    */
   const recursive = (value, index) => {
-    bv.setU8(index, 0xff);
+    bv.setU8(0, 0xff);
     const typed = new Typed(
       bv.getTyped(0, addPositiveNumber(bv, 1, index), Uint8Array)
     );
