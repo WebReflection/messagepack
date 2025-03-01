@@ -20,3 +20,7 @@ console.log(decode(encode([1, 2, 3, 4])));
 console.log(decode(encode(Array.from({ length: 0x10000 }, (v, i) => i))).length === 0x10000);
 
 console.log(decode(encode(new Uint32Array([1, 2, 3]))));
+
+const a = [];
+a.push(a);
+console.log(decode(encode(a)));

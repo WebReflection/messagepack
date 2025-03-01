@@ -19,7 +19,7 @@ export default function ({
    * @param {BetterView} bv
    * @param {number} index
    * @param {number} length
-   * @returns 
+   * @returns
    */
   const arr = (bv, index, length) => {
     const value = [];
@@ -33,7 +33,7 @@ export default function ({
    * @param {number} index
    * @param {number} length
    * @param {number} bytes
-   * @returns 
+   * @returns
    */
   const array = (bv, index, length, bytes) => {
     i += bytes;
@@ -43,23 +43,8 @@ export default function ({
   /**
    * @param {BetterView} bv
    * @param {number} index
-   * @param {number} length
-   * @param {number} bytes
-   * @returns 
-   */
-  const view = (bv, index, length, bytes) => {
-    i += bytes;
-    const value = bv.getTyped(i, length, Uint8Array);
-    i += length;
-    if (recursion) cache.set(index, value);
-    return value;
-  };
-
-  /**
-   * @param {BetterView} bv
-   * @param {number} index
    * @param {number} pairs
-   * @returns 
+   * @returns
    */
   const obj = (bv, index, pairs) => {
     const value = {};
@@ -73,7 +58,7 @@ export default function ({
    * @param {number} index
    * @param {number} pairs
    * @param {number} bytes
-   * @returns 
+   * @returns
    */
   const object = (bv, index, pairs, bytes) => {
     i += bytes;
@@ -83,7 +68,7 @@ export default function ({
   /**
    * @param {BetterView} bv
    * @param {number} length
-   * @returns 
+   * @returns
    */
   const str = (bv, length) => {
     const str = textDecoder.decode(bv.getTyped(i, length, Uint8Array));
@@ -95,7 +80,7 @@ export default function ({
    * @param {BetterView} bv
    * @param {number} length
    * @param {number} bytes
-   * @returns 
+   * @returns
    */
   const string = (bv, length, bytes) => {
     i += bytes;
@@ -127,6 +112,8 @@ export default function ({
       return str(bv, headByte - 0xa0);
     }
     switch (headByte) {
+      // TODO: 0xff is not good
+      case 0xff: return cache.get(decode(bv));
       case 0xc0: return null;
       case 0xc2: return false;
       case 0xc3: return true;
@@ -165,6 +152,21 @@ export default function ({
       case 0xc5: return view(bv, index, bv.getUint16(i), 2);
       case 0xc6: return view(bv, index, bv.getUint32(i), 4);
     }
+  };
+
+  /**
+   * @param {BetterView} bv
+   * @param {number} index
+   * @param {number} length
+   * @param {number} bytes
+   * @returns
+   */
+  const view = (bv, index, length, bytes) => {
+    i += bytes;
+    const value = bv.getTyped(i, length, Uint8Array);
+    i += length;
+    if (recursion) cache.set(index, value);
+    return value;
   };
 
   /**

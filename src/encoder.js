@@ -33,11 +33,11 @@ export default function ({
   const addPositiveNumber = (dataView, bvteOffset, value) => {
     if (value < 0x80) {
       dataView.setU8(bvteOffset, value);
-      return bvteOffset + 1;
+      return bvteOffset;
     }
     else if (value < 0x100) {
       dataView.setArray(bvteOffset, [0xcc, value]);
-      return bvteOffset + 2;
+      return bvteOffset + 1;
     }
     else if (value < 0x10000) {
       dataView.setU8(bvteOffset, 0xcd);
@@ -221,6 +221,7 @@ export default function ({
    * @returns
    */
   const recursive = (value, index) => {
+    // TODO: 0xff is not good
     bv.setU8(0, 0xff);
     const typed = new Typed(
       bv.getTyped(0, addPositiveNumber(bv, 1, index), Uint8Array)
