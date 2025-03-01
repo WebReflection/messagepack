@@ -4,7 +4,7 @@
     "test": "c8 node test/compare.js"
   },
   "dependencies": {
-    "@webreflection/magic-view": "^0.2.11"
+    "@webreflection/magic-view": "^0.2.13"
   },
   "devDependencies": {
     "@msgpack/msgpack": "^3.1.0",

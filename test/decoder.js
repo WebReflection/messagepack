@@ -21,6 +21,8 @@ console.log(decode(encode(Array.from({ length: 0x10000 }, (v, i) => i))).length 
 
 console.log(decode(encode(new Uint32Array([1, 2, 3]))));
 
-const a = [];
-a.push(a);
-console.log(decode(encode(a)));
+const a = [1, 0, 1, 0, 1];
+a[1] = a;
+a[3] = a;
+const da = decode(encode(a));
+console.log(da);

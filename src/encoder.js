@@ -1,7 +1,8 @@
 //@ts-check
 
 import { MagicView, BetterView } from '@webreflection/magic-view';
-import Typed from './typed.js';
+
+import { EXT_CIRCULAR } from './fixext.js';
 
 const { isArray } = Array;
 const { isView } = ArrayBuffer;
@@ -11,50 +12,28 @@ const { entries } = Object;
 const minimumBufferSize = 0xFFFF;
 const textEncoder = new TextEncoder;
 
+/** @template T */
+class Typed {
+  /** @param {T} value */
+  constructor(value) {
+    /** @type {T} */
+    this.value = value;
+  }
+}
+
 /**
  * @param {object} options
  * @returns
  */
 export default function ({
-  recursion = true,
+  circular = true,
   littleEndian = false,
   extensions = new Map,
   initialBufferSize = minimumBufferSize,
 } = { initialBufferSize: minimumBufferSize }) {
-  const mv = new MagicView(initialBufferSize);
-  const bv = new BetterView(new ArrayBuffer(10));
   const cache = /** @type {Map<any,Typed>} */(new Map);
-
-  /**
-   * @param {BetterView} dataView
-   * @param {number} bvteOffset
-   * @param {number} value
-   */
-  const addPositiveNumber = (dataView, bvteOffset, value) => {
-    if (value < 0x80) {
-      dataView.setU8(bvteOffset, value);
-      return bvteOffset;
-    }
-    else if (value < 0x100) {
-      dataView.setArray(bvteOffset, [0xcc, value]);
-      return bvteOffset + 1;
-    }
-    else if (value < 0x10000) {
-      dataView.setU8(bvteOffset, 0xcd);
-      dataView.setUint16(bvteOffset + 1, value, littleEndian);
-      return bvteOffset + 3;
-    }
-    else if (value < 0x100000000) {
-      dataView.setU8(bvteOffset, 0xce);
-      dataView.setUint32(bvteOffset + 1, value, littleEndian);
-      return bvteOffset + 5;
-    }
-    else {
-      dataView.setU8(bvteOffset, 0xcb);
-      dataView.setFloat64(bvteOffset + 1, value);
-      return bvteOffset + 9;
-    }
-  };
+  const mv = new MagicView(initialBufferSize);
+  const bv = new BetterView(new ArrayBuffer(18));
 
   /** @param {any[]} value */
   const array = value => {
@@ -71,10 +50,10 @@ export default function ({
       mv.setUint32(size + 1, length, littleEndian);
     }
     let typed;
-    if (recursion) typed = recursive(value, size);
+    if (circular) typed = circle(value, size);
     for (let i = 0; i < length; i++) encode(value[i], true);
     //@ts-ignore and seriously: WTF!
-    if (recursion) typed.value = mv.getTyped(size, mv.size, Uint8Array);
+    if (circular) typed.value = mv.getTyped(size, mv.size, Uint8Array);
   };
 
   /** @param {any} value */
@@ -95,26 +74,23 @@ export default function ({
       case 'bigint': {
         if (value >= 0n) {
           mv.setU8(mv.size, 0xcf);
-          mv.setBigUint64(mv.size, value);
+          mv.setBigUint64(mv.size, value, littleEndian);
         }
         else {
           mv.setU8(mv.size, 0xd3);
-          mv.setBigInt64(mv.size, value);
+          mv.setBigInt64(mv.size, value, littleEndian);
         }
         break;
       }
       case 'object': {
-        if (value === null) {
-          nil();
-          break;
-        }
+        if (value === null) nil();
         else if (notCached(value)) {
           // TODO extensions in here
           if (isArray(value)) array(value);
           else if (isView(value)) view(value);
           else object(value);
-          break;
         }
+        break;
       }
       default: {
         if (nullify) nil();
@@ -141,8 +117,24 @@ export default function ({
   const num = value => {
     const size = mv.size;
     if (isSafeInteger(value)) {
-      if (value >= 0)
-        addPositiveNumber(mv, size, value);
+      if (value >= 0) {
+        if (value < 0x80)
+          mv.setU8(size, value);
+        else if (value < 0x100)
+          mv.setArray(size, [0xcc, value]);
+        else if (value < 0x10000) {
+          mv.setU8(size, 0xcd);
+          mv.setUint16(size + 1, value, littleEndian);
+        }
+        else if (value < 0x100000000) {
+          mv.setU8(size, 0xce);
+          mv.setUint32(size + 1, value, littleEndian);
+        }
+        else {
+          mv.setU8(size, 0xcb);
+          mv.setFloat64(size + 1, value, littleEndian);
+        }
+      }
       else {
         if (value >= -0x20)
           mv.setU8(size, 0xe0 | (value + 0x20));
@@ -160,13 +152,13 @@ export default function ({
         }
         else {
           mv.setU8(size, 0xcb);
-          mv.setFloat64(size + 1, value);
+          mv.setFloat64(size + 1, value, littleEndian);
         }
       }
     }
     else {
       mv.setU8(size, 0xcb);
-      mv.setFloat64(size + 1, value);
+      mv.setFloat64(size + 1, value, littleEndian);
     }
   };
 
@@ -198,21 +190,14 @@ export default function ({
       mv.setUint32(size + 1, length, littleEndian);
     }
     let typed;
-    if (recursion) typed = recursive(value, size);
-    for (let size = 0, i = 0; i < length; i++) {
+    if (circular) typed = circle(value, size);
+    for (let i = 0; i < length; i++) {
       const [key, value] = encoded[i];
-      // TODO: check recursive keys: I don't think this works
-      if (recursion) {
-        size = mv.size;
-        typed = recursive(key, size);
-      }
       str(key);
-      //@ts-ignore and seriously: WTF!
-      if (recursion) typed.value = mv.getTyped(size, mv.size, Uint8Array);
       encode(value);
     }
     //@ts-ignore and seriously: WTF!
-    if (recursion) typed.value = mv.getTyped(size, mv.size, Uint8Array);
+    if (circular) typed.value = mv.getTyped(size, mv.size, Uint8Array);
   };
 
   /**
@@ -220,12 +205,26 @@ export default function ({
    * @param {number} index
    * @returns
    */
-  const recursive = (value, index) => {
-    // TODO: 0xff is not good
-    bv.setU8(0, 0xff);
-    const typed = new Typed(
-      bv.getTyped(0, addPositiveNumber(bv, 1, index), Uint8Array)
-    );
+  const circle = (value, index) => {
+    let size = 0;
+    bv.setInt8(1, EXT_CIRCULAR);
+    if (index < 0x100) {
+      bv.setUint8(0, 0xd4);
+      bv.setUint8(2, index);
+      size = 3;
+    }
+    else if (index < 0x10000) {
+      bv.setUint8(0, 0xd5);
+      bv.setUint16(2, index, littleEndian);
+      size = 4;
+    }
+    else {
+      bv.setUint8(0, 0xd6);
+      bv.setUint32(2, index, littleEndian);
+      size = 6;
+    }
+
+    const typed = new Typed(bv.getTyped(0, size, Uint8Array));
     cache.set(value, typed);
     return typed;
   };
@@ -258,24 +257,24 @@ export default function ({
   const view = value => {
     let typed, size = mv.size, rsize = size;
     const byteLength = value.byteLength;
-    if (recursion) typed = recursive(value, size);
+    if (circular) typed = circle(value, size);
     if (byteLength < 0x100) {
       mv.setArray(size, [0xc4, byteLength]);
       size += 2;
     }
     else if (byteLength < 0x10000) {
       mv.setU8(size, 0xc5);
-      mv.setUint16(size + 1, byteLength);
+      mv.setUint16(size + 1, byteLength, littleEndian);
       size += 3;
     }
     else {
       mv.setU8(size, 0xc6);
-      mv.setUint32(size + 1, byteLength);
+      mv.setUint32(size + 1, byteLength, littleEndian);
       size += 5;
     }
     mv.setTyped(size, value);
     //@ts-ignore and seriously: WTF!
-    if (recursion) typed.value = mv.getTyped(rsize, mv.size, Uint8Array);
+    if (circular) typed.value = mv.getTyped(rsize, mv.size, Uint8Array);
   };
 
   /**

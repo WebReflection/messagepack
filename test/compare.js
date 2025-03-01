@@ -66,3 +66,7 @@ console.log({ o: local(o) });
 a.push(o);
 o.a = a;
 console.log({ a: local(a) });
+
+a = [];
+a.push(a);
+console.log(local(a));

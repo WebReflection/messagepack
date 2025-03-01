@@ -1,7 +1,8 @@
 //@ts-check
 
 import { BetterView } from '@webreflection/magic-view';
-import Typed from './typed.js';
+
+import { EXT_CIRCULAR } from './fixext.js';
 
 const textDecoder = new TextDecoder;
 
@@ -13,7 +14,7 @@ export default function ({
   /** @type {Map<number,any>} */
   const cache = new Map;
 
-  let i = 0;
+  let i = 0, sub = true;
 
   /**
    * @param {BetterView} bv
@@ -71,7 +72,9 @@ export default function ({
    * @returns
    */
   const str = (bv, length) => {
-    const str = textDecoder.decode(bv.getTyped(i, length, Uint8Array));
+    const str = textDecoder.decode(
+      sub ? bv.getSub(i, length) : bv.getTyped(i, length)
+    );
     i += length;
     return str;
   };
@@ -112,46 +115,75 @@ export default function ({
       return str(bv, headByte - 0xa0);
     }
     switch (headByte) {
-      // TODO: 0xff is not good
-      case 0xff: return cache.get(decode(bv));
       case 0xc0: return null;
       case 0xc2: return false;
       case 0xc3: return true;
 
       // float
-      case 0xca: return number(bv.getFloat32(i), 4);
-      case 0xcb: return number(bv.getFloat64(i), 8);
+      case 0xca: return number(bv.getFloat32(i, littleEndian), 4);
+      case 0xcb: return number(bv.getFloat64(i, littleEndian), 8);
 
       // uint
       case 0xcc: return bv.getUint8(i++);
-      case 0xcd: return number(bv.getUint16(i), 2);
-      case 0xce: return number(bv.getUint32(i), 4);
-      case 0xcf: return number(bv.getBigUint64(i), 8);
+      case 0xcd: return number(bv.getUint16(i, littleEndian), 2);
+      case 0xce: return number(bv.getUint32(i, littleEndian), 4);
+      case 0xcf: return number(bv.getBigUint64(i, littleEndian), 8);
 
       // int
       case 0xd0: return bv.getInt8(i++);
-      case 0xd1: return number(bv.getInt16(i), 2);
-      case 0xd2: return number(bv.getInt32(i), 4);
-      case 0xd3: return number(bv.getBigInt64(i), 8);
+      case 0xd1: return number(bv.getInt16(i, littleEndian), 2);
+      case 0xd2: return number(bv.getInt32(i, littleEndian), 4);
+      case 0xd3: return number(bv.getBigInt64(i, littleEndian), 8);
 
       // string
       case 0xd9: return string(bv, bv.getUint8(i), 1);
-      case 0xda: return string(bv, bv.getUint16(i), 2);
-      case 0xdb: return string(bv, bv.getUint32(i), 4);
+      case 0xda: return string(bv, bv.getUint16(i, littleEndian), 2);
+      case 0xdb: return string(bv, bv.getUint32(i, littleEndian), 4);
 
       // array
-      case 0xdc: return array(bv, index, bv.getUint16(i), 2);
-      case 0xdd: return array(bv, index, bv.getUint32(i), 4);
+      case 0xdc: return array(bv, index, bv.getUint16(i, littleEndian), 2);
+      case 0xdd: return array(bv, index, bv.getUint32(i, littleEndian), 4);
 
       // object
-      case 0xde: return object(bv, index, bv.getUint16(i), 2);
-      case 0xdf: return object(bv, index, bv.getUint32(i), 4);
+      case 0xde: return object(bv, index, bv.getUint16(i, littleEndian), 2);
+      case 0xdf: return object(bv, index, bv.getUint32(i, littleEndian), 4);
 
       // view
       case 0xc4: return view(bv, index, bv.getUint8(i), 1);
-      case 0xc5: return view(bv, index, bv.getUint16(i), 2);
-      case 0xc6: return view(bv, index, bv.getUint32(i), 4);
+      case 0xc5: return view(bv, index, bv.getUint16(i, littleEndian), 2);
+      case 0xc6: return view(bv, index, bv.getUint32(i, littleEndian), 4);
+
+      // fixext
+      case 0xd4: return fixext(bv, bv.getInt8(i++), 1);
+      case 0xd5: return fixext(bv, bv.getInt8(i++), 2);
+      case 0xd6: return fixext(bv, bv.getInt8(i++), 4);
+      case 0xd7: return fixext(bv, bv.getInt8(i++), 8);
+      case 0xd8: return fixext(bv, bv.getInt8(i++), 16);
     }
+  };
+
+  /**
+   * @param {BetterView} bv
+   * @param {number} type
+   * @param {number} bytes
+   * @returns
+   */
+  const fixext = (bv, type, bytes) => {
+    let value;
+    switch (type) {
+      case EXT_CIRCULAR: {
+        const index = bytes < 2 ?
+            bv.getUint8(i) :
+            (bytes < 4 ?
+                bv.getUint16(i, littleEndian) :
+                bv.getUint32(i, littleEndian))
+        ;
+        value = cache.get(index);
+        break;
+      }
+    }
+    i =+ bytes;
+    return value;
   };
 
   /**
@@ -163,7 +195,7 @@ export default function ({
    */
   const view = (bv, index, length, bytes) => {
     i += bytes;
-    const value = bv.getTyped(i, length, Uint8Array);
+    const value = bv.getTyped(i, length);
     i += length;
     if (recursion) cache.set(index, value);
     return value;
@@ -175,6 +207,7 @@ export default function ({
    */
   return ({ buffer }) => {
     i = 0;
+    sub = buffer instanceof ArrayBuffer;
     const result = decode(new BetterView(buffer));
     cache.clear();
     return result;
