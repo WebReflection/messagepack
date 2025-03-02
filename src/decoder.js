@@ -2,7 +2,7 @@
 
 import { BetterView } from '@webreflection/magic-view';
 
-import { EXT_CIRCULAR } from './fixext.js';
+import { EXT_CIRCULAR, EXT_TIMESTAMP } from './builtins.js';
 
 const textDecoder = new TextDecoder;
 
@@ -106,15 +106,15 @@ export default function ({
    */
   const decode = bv => {
     const index = i++;
-    const headByte = bv.getUint8(index);
-    if (headByte >= 0xe0) return headByte - 0x100;
-    if (headByte < 0xc0) {
-      if (headByte < 0x80) return headByte;
-      if (headByte < 0x90) return obj(bv, index, headByte - 0x80);
-      if (headByte < 0xa0) return arr(bv, index, headByte - 0x90);
-      return str(bv, headByte - 0xa0);
+    const type = bv.getUint8(index);
+    if (type >= 0xe0) return type - 0x100;
+    if (type < 0xc0) {
+      if (type < 0x80) return type;
+      if (type < 0x90) return obj(bv, index, type - 0x80);
+      if (type < 0xa0) return arr(bv, index, type - 0x90);
+      return str(bv, type - 0xa0);
     }
-    switch (headByte) {
+    switch (type) {
       case 0xc0: return null;
       case 0xc2: return false;
       case 0xc3: return true;
@@ -154,36 +154,68 @@ export default function ({
       case 0xc6: return view(bv, index, bv.getUint32(i, littleEndian), 4);
 
       // fixext
-      case 0xd4: return fixext(bv, bv.getInt8(i++), 1);
-      case 0xd5: return fixext(bv, bv.getInt8(i++), 2);
-      case 0xd6: return fixext(bv, bv.getInt8(i++), 4);
-      case 0xd7: return fixext(bv, bv.getInt8(i++), 8);
-      case 0xd8: return fixext(bv, bv.getInt8(i++), 16);
+      case 0xd4: return ext(bv, 1, true);
+      case 0xd5: return ext(bv, 2, true);
+      case 0xd6: return ext(bv, 4, true);
+      // TODO: what are the use cases?
+      // case 0xd7: return extension(bv, 8, true);
+      // case 0xd8: return extension(bv, 16, true);
+
+      // ext
+      case 0xc7: return ext(bv, len(bv, 1), false);
+      case 0xc8: return ext(bv, len(bv, 2), false);
+      case 0xc9: return ext(bv, len(bv, 4), false);
+
+      default: error(type);
     }
   };
 
   /**
    * @param {BetterView} bv
-   * @param {number} type
-   * @param {number} bytes
+   * @param {number} size
    * @returns
    */
-  const fixext = (bv, type, bytes) => {
-    let value;
-    switch (type) {
-      case EXT_CIRCULAR: {
-        const index = bytes < 2 ?
-            bv.getUint8(i) :
-            (bytes < 4 ?
-                bv.getUint16(i, littleEndian) :
-                bv.getUint32(i, littleEndian))
-        ;
-        value = cache.get(index);
-        break;
+  const len = (bv, size) => {
+    if (size === 1) size = bv.getUint8(i);
+    else if (size === 2) bv.getUint16(i, littleEndian);
+    else if (size === 4) size = bv.getUint32(i, littleEndian);
+    i += size;
+    return size;
+  };
+
+  /**
+   * @param {BetterView} bv
+   * @param {number} size
+   * @param {boolean} fixed
+   * @returns
+   */
+  const ext = (bv, size, fixed) => {
+    const type = bv.getInt8(i++);
+    if (fixed) {
+      const data = len(bv, size);
+      switch (type) {
+        case EXT_CIRCULAR:
+          return cache.get(data);
+        case EXT_TIMESTAMP: {
+          // TODO;
+          console.warn(type);
+          return data;
+        }
       }
     }
-    i =+ bytes;
-    return value;
+    else {
+      const data = bv.getTyped(i, size);
+      i += size;
+      // TODO
+      return data;
+    }
+    error(type);
+  };
+
+  /** @param {number} type */
+  const error = type => {
+    const hex = type.toString(16).padStart(2, '0');
+    throw new TypeError(`Unrecognized type: 0x${hex}}`);
   };
 
   /**

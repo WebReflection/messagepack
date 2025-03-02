@@ -2,7 +2,7 @@
 
 import { MagicView, BetterView } from '@webreflection/magic-view';
 
-import { EXT_CIRCULAR } from './fixext.js';
+import { EXT_CIRCULAR } from './builtins.js';
 
 const { isArray } = Array;
 const { isView } = ArrayBuffer;
@@ -53,7 +53,7 @@ export default function ({
     if (circular) typed = circle(value, size);
     for (let i = 0; i < length; i++) encode(value[i], true);
     //@ts-ignore and seriously: WTF!
-    if (circular) typed.value = mv.getTyped(size, mv.size, Uint8Array);
+    if (circular) typed.value = mv.getTyped(size, mv.size);
   };
 
   /** @param {any} value */
@@ -197,7 +197,7 @@ export default function ({
       encode(value);
     }
     //@ts-ignore and seriously: WTF!
-    if (circular) typed.value = mv.getTyped(size, mv.size, Uint8Array);
+    if (circular) typed.value = mv.getTyped(size, mv.size);
   };
 
   /**
@@ -224,7 +224,7 @@ export default function ({
       size = 6;
     }
 
-    const typed = new Typed(bv.getTyped(0, size, Uint8Array));
+    const typed = new Typed(bv.getTyped(0, size));
     cache.set(value, typed);
     return typed;
   };
@@ -274,7 +274,7 @@ export default function ({
     }
     mv.setTyped(size, value);
     //@ts-ignore and seriously: WTF!
-    if (circular) typed.value = mv.getTyped(rsize, mv.size, Uint8Array);
+    if (circular) typed.value = mv.getTyped(rsize, mv.size);
   };
 
   /**
