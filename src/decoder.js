@@ -141,7 +141,7 @@ const decoder = ({ circular, littleEndian, extensions }) => {
           break;
         }
         case 16: err(type);
-        // TODO: what are the use cases and why timestamp has 12?
+        // TODO: what are the use cases?
       }
     }
     else {
