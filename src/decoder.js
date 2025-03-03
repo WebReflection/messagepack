@@ -90,17 +90,17 @@ const decoder = ({ circular, littleEndian, extensions }) => {
       case 0xc6: return view(bv, index, uint(bv, 4));
 
       // fixext
-      case 0xd4: return ext(bv, index, 1, true);
-      case 0xd5: return ext(bv, index, 2, true);
-      case 0xd6: return ext(bv, index, 4, true);
-      case 0xd7: return ext(bv, index, 8, true);
+      case 0xd4: return ext(bv, index, 1);
+      case 0xd5: return ext(bv, index, 2);
+      case 0xd6: return ext(bv, index, 4);
+      case 0xd7: return ext(bv, index, 8);
       // case 0xd8: return extension(bv, index, 16, true);
       // TODO: what are the use cases and why timestamp has 12?
 
       // ext
-      case 0xc7: return ext(bv, index, uint(bv, 1), false);
-      case 0xc8: return ext(bv, index, uint(bv, 2), false);
-      case 0xc9: return ext(bv, index, uint(bv, 4), false);
+      case 0xc7: return ext(bv, index, uint(bv, 1));
+      case 0xc8: return ext(bv, index, uint(bv, 2));
+      case 0xc9: return ext(bv, index, uint(bv, 4));
 
       // unknown
       default: err(type);
@@ -114,14 +114,12 @@ const decoder = ({ circular, littleEndian, extensions }) => {
   };
 
   /**
-   * @template {boolean} F
    * @param {BetterView} bv
    * @param {number} index
    * @param {number} size
-   * @param {F} fixed
    * @returns
    */
-  const ext = (bv, index, size, fixed) => {
+  const ext = (bv, index, size) => {
     const type = bv.getInt8(i++);
     if (type === EXT_CIRCULAR)
       return cache.get(uint(bv, /** @type {1 | 2 | 4} */(size)));
@@ -147,7 +145,7 @@ const decoder = ({ circular, littleEndian, extensions }) => {
       }
     }
     else {
-      const data = typed(bv, fixed ? uint(bv, /** @type {1 | 2 | 4} */(size)) : size);
+      const data = typed(bv, size);
       const extension = /** @type {Extensions} */(extensions).get(type);
       value = extension ? extension.decode(data, type) : new ExtData(type, data);
     }
