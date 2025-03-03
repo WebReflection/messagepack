@@ -26,3 +26,12 @@ a[1] = a;
 a[3] = a;
 const da = decode(encode(a));
 console.log(da);
+
+const date = new Date;
+let value = [1, date, 2];
+const encoded = messagepack.encode(value);
+console.log(messagepack.decode(encoded));
+console.log(decode(encoded));
+
+value = [1, new Uint8Array(0x100), 2, "test", 3];
+console.log(decode(encode(value)));

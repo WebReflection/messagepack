@@ -31,74 +31,10 @@ export default function ({
 
   /**
    * @param {BetterView} bv
-   * @param {number} index
-   * @param {number} length
-   * @param {number} bytes
-   * @returns
+   * @param {Function} method
+   * @returns {bigint}
    */
-  const array = (bv, index, length, bytes) => {
-    i += bytes;
-    return arr(bv, index, length);
-  };
-
-  /**
-   * @param {BetterView} bv
-   * @param {number} index
-   * @param {number} pairs
-   * @returns
-   */
-  const obj = (bv, index, pairs) => {
-    const value = {};
-    if (recursion) cache.set(index, value);
-    while (pairs--) value[decode(bv)] = decode(bv);
-    return value;
-  };
-
-  /**
-   * @param {BetterView} bv
-   * @param {number} index
-   * @param {number} pairs
-   * @param {number} bytes
-   * @returns
-   */
-  const object = (bv, index, pairs, bytes) => {
-    i += bytes;
-    return obj(bv, index, pairs);
-  };
-
-  /**
-   * @param {BetterView} bv
-   * @param {number} length
-   * @returns
-   */
-  const str = (bv, length) => {
-    const str = textDecoder.decode(
-      sub ? bv.getSub(i, length) : bv.getTyped(i, length)
-    );
-    i += length;
-    return str;
-  };
-
-  /**
-   * @param {BetterView} bv
-   * @param {number} length
-   * @param {number} bytes
-   * @returns
-   */
-  const string = (bv, length, bytes) => {
-    i += bytes;
-    return str(bv, length);
-  };
-
-  /**
-   * @param {number|bigint} value
-   * @param {number} bytes
-   * @returns
-   */
-  const number = (value, bytes) => {
-    i += bytes;
-    return value;
-  };
+  const big = (bv, method) => read(method.call(bv, i, littleEndian), 8);
 
   /**
    * @param {BetterView} bv
@@ -120,115 +56,162 @@ export default function ({
       case 0xc3: return true;
 
       // float
-      case 0xca: return number(bv.getFloat32(i, littleEndian), 4);
-      case 0xcb: return number(bv.getFloat64(i, littleEndian), 8);
+      case 0xca: return read(bv.getFloat32(i, littleEndian), 4);
+      case 0xcb: return read(bv.getFloat64(i, littleEndian), 8);
 
-      // uint
+      // unsigned
       case 0xcc: return bv.getUint8(i++);
-      case 0xcd: return number(bv.getUint16(i, littleEndian), 2);
-      case 0xce: return number(bv.getUint32(i, littleEndian), 4);
-      case 0xcf: return number(bv.getBigUint64(i, littleEndian), 8);
+      case 0xcd: return uint(bv, 2);
+      case 0xce: return uint(bv, 4);
+      case 0xcf: return big(bv, bv.getBigUint64);
 
-      // int
+      // signed
       case 0xd0: return bv.getInt8(i++);
-      case 0xd1: return number(bv.getInt16(i, littleEndian), 2);
-      case 0xd2: return number(bv.getInt32(i, littleEndian), 4);
-      case 0xd3: return number(bv.getBigInt64(i, littleEndian), 8);
+      case 0xd1: return read(bv.getInt16(i, littleEndian), 2);
+      case 0xd2: return read(bv.getInt32(i, littleEndian), 4);
+      case 0xd3: return big(bv, bv.getBigInt64);
 
       // string
-      case 0xd9: return string(bv, bv.getUint8(i), 1);
-      case 0xda: return string(bv, bv.getUint16(i, littleEndian), 2);
-      case 0xdb: return string(bv, bv.getUint32(i, littleEndian), 4);
+      case 0xd9: return str(bv, bv.getUint8(i++));
+      case 0xda: return str(bv, uint(bv, 2));
+      case 0xdb: return str(bv, uint(bv, 4));
 
       // array
-      case 0xdc: return array(bv, index, bv.getUint16(i, littleEndian), 2);
-      case 0xdd: return array(bv, index, bv.getUint32(i, littleEndian), 4);
+      case 0xdc: return arr(bv, index, uint(bv, 2));
+      case 0xdd: return arr(bv, index, uint(bv, 4));
 
       // object
-      case 0xde: return object(bv, index, bv.getUint16(i, littleEndian), 2);
-      case 0xdf: return object(bv, index, bv.getUint32(i, littleEndian), 4);
+      case 0xde: return obj(bv, index, uint(bv, 2));
+      case 0xdf: return obj(bv, index, uint(bv, 4));
 
       // view
-      case 0xc4: return view(bv, index, bv.getUint8(i), 1);
-      case 0xc5: return view(bv, index, bv.getUint16(i, littleEndian), 2);
-      case 0xc6: return view(bv, index, bv.getUint32(i, littleEndian), 4);
+      case 0xc4: return view(bv, index, bv.getUint8(i++));
+      case 0xc5: return view(bv, index, uint(bv, 2));
+      case 0xc6: return view(bv, index, uint(bv, 4));
 
       // fixext
       case 0xd4: return ext(bv, 1, true);
       case 0xd5: return ext(bv, 2, true);
       case 0xd6: return ext(bv, 4, true);
-      // TODO: what are the use cases?
-      // case 0xd7: return extension(bv, 8, true);
+      case 0xd7: return ext(bv, 8, true);
       // case 0xd8: return extension(bv, 16, true);
+      // TODO: what are the use cases and why timestamp has 12?
 
       // ext
-      case 0xc7: return ext(bv, len(bv, 1), false);
-      case 0xc8: return ext(bv, len(bv, 2), false);
-      case 0xc9: return ext(bv, len(bv, 4), false);
+      case 0xc7: return ext(bv, bv.getUint8(i++), false);
+      case 0xc8: return ext(bv, uint(bv, 2), false);
+      case 0xc9: return ext(bv, uint(bv, 4), false);
 
-      default: error(type);
+      // unknown
+      default: err(type);
     }
-  };
-
-  /**
-   * @param {BetterView} bv
-   * @param {number} size
-   * @returns
-   */
-  const len = (bv, size) => {
-    if (size === 1) size = bv.getUint8(i);
-    else if (size === 2) bv.getUint16(i, littleEndian);
-    else if (size === 4) size = bv.getUint32(i, littleEndian);
-    i += size;
-    return size;
-  };
-
-  /**
-   * @param {BetterView} bv
-   * @param {number} size
-   * @param {boolean} fixed
-   * @returns
-   */
-  const ext = (bv, size, fixed) => {
-    const type = bv.getInt8(i++);
-    if (fixed) {
-      const data = len(bv, size);
-      switch (type) {
-        case EXT_CIRCULAR:
-          return cache.get(data);
-        case EXT_TIMESTAMP: {
-          // TODO;
-          console.warn(type);
-          return data;
-        }
-      }
-    }
-    else {
-      const data = bv.getTyped(i, size);
-      i += size;
-      // TODO
-      return data;
-    }
-    error(type);
   };
 
   /** @param {number} type */
-  const error = type => {
+  const err = type => {
     const hex = type.toString(16).padStart(2, '0');
     throw new TypeError(`Unrecognized type: 0x${hex}}`);
   };
 
   /**
+   * @template {boolean} F
+   * @param {BetterView} bv
+   * @param {number} size
+   * @param {F} fixed
+   * @returns
+   */
+  const ext = (bv, size, fixed) => {
+    const type = bv.getInt8(i++);
+    if (fixed) {
+      switch (type) {
+        case EXT_CIRCULAR: {
+          const index = size < 2 ?
+            bv.getUint8(i++) :
+            uint(bv, /** @type {2 | 4} */(size))
+          ;
+          return cache.get(index);
+        }
+        case EXT_TIMESTAMP: {
+          switch (size) {
+            case 4:
+              return new Date(uint(bv, size) * 1e3);
+            case 8: {
+              // (c) @msgpack/msgpack - https://github.com/msgpack/msgpack-javascript/blob/accf28769bce33507673723b10886783845ee430/src/timestamp.ts#L25-L34
+              const nsec30AndSecHigh2 = uint(bv, 4);
+              const secLow32 = uint(bv, 4);
+              const sec = (nsec30AndSecHigh2 & 0x3) * 0x100000000 + secLow32;
+              const nano = nsec30AndSecHigh2 >>> 2;
+              return new Date(sec * 1e3 + nano / 1e6);
+            }
+            // case 16: {}
+            // TODO: what are the use cases and why timestamp has 12?
+          }
+        }
+      }
+    }
+    else {
+      const data = read(bv.getTyped(i, size), size);
+      // TODO
+      return data;
+    }
+    err(type);
+  };
+
+  /**
    * @param {BetterView} bv
    * @param {number} index
-   * @param {number} length
+   * @param {number} pairs
+   * @returns
+   */
+  const obj = (bv, index, pairs) => {
+    const value = {};
+    if (recursion) cache.set(index, value);
+    while (pairs--) value[decode(bv)] = decode(bv);
+    return value;
+  };
+
+  /**
+   * @template T
+   * @param {T} value
    * @param {number} bytes
    * @returns
    */
-  const view = (bv, index, length, bytes) => {
+  const read = (value, bytes) => {
     i += bytes;
-    const value = bv.getTyped(i, length);
-    i += length;
+    return value;
+  };
+
+  /**
+   * @param {BetterView} bv
+   * @param {number} length
+   * @returns
+   */
+  const str = (bv, length) => textDecoder.decode(
+    sub ?
+      read(bv.getSub(i, length), length) :
+      read(bv.getTyped(i, length), length)
+  );
+
+  /**
+   * @param {BetterView} bv
+   * @param {2 | 4} size
+   * @returns
+   */
+  const uint = (bv, size) => read(
+    size < 4 ?
+      bv.getUint16(i, littleEndian) :
+      bv.getUint32(i, littleEndian),
+    size
+  );
+
+  /**
+   * @param {BetterView} bv
+   * @param {number} index
+   * @param {number} length
+   * @returns
+   */
+  const view = (bv, index, length) => {
+    const value = read(bv.getTyped(i, length), length);
     if (recursion) cache.set(index, value);
     return value;
   };
@@ -239,7 +222,8 @@ export default function ({
    */
   return ({ buffer }) => {
     i = 0;
-    sub = buffer instanceof ArrayBuffer;
+    //@ts-ignore - ⚠️ TextDecoder fails with subarray of a growable SharedArrayBuffer
+    sub = (buffer instanceof ArrayBuffer) || !buffer.growable;
     const result = decode(new BetterView(buffer));
     cache.clear();
     return result;

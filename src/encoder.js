@@ -36,7 +36,7 @@ export default function ({
   const bv = new BetterView(new ArrayBuffer(18));
 
   /** @param {any[]} value */
-  const array = value => {
+  const arr = value => {
     const size = mv.size;
     const length = value.length;
     if (length < 16)
@@ -86,9 +86,9 @@ export default function ({
         if (value === null) nil();
         else if (notCached(value)) {
           // TODO extensions in here
-          if (isArray(value)) array(value);
+          if (isArray(value)) arr(value);
           else if (isView(value)) view(value);
-          else object(value);
+          else obj(value);
         }
         break;
       }
@@ -163,7 +163,7 @@ export default function ({
   };
 
   /** @param {object} value */
-  const object = value => {
+  const obj = value => {
     const size = mv.size;
     const pairs = entries(value);
     const encoded = [];
@@ -231,6 +231,14 @@ export default function ({
 
   /** @param {string} value */
   const str = value => {
+    // TODO: see if pre-allocating via https://stackoverflow.com/a/23329386
+    //       or via https://github.com/msgpack/msgpack-javascript/blob/accf28769bce33507673723b10886783845ee430/src/utils/utf8.ts#L1
+    //       helps encoding of strings directly into the resized buffer (it should)
+    //       ⚠️ right now this duplicates the amount of RAM while encoding each string,
+    //       adding pressure to the GC too: not ideal at all and yet ...
+    //       https://es.discourse.group/t/string-bytelength-count/2315
+    //       we have no way to just count or get the internal string size as buffer,
+    //       for whatever reason that might be explained in the future in that TC39 topic.
     const ui8a = textEncoder.encode(value);
     const length = ui8a.length;
     let size = mv.size;
