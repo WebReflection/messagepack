@@ -1,5 +1,7 @@
 //@ts-check
 
+/** @typedef {object & { encode(value:any):Uint8Array, decode(view:Uint8Array, type:number):any }} Extension */
+
 export class ExtData {
   /**
    * @param {number} type
@@ -16,7 +18,7 @@ export class ExtData {
 export class Extensions extends Map {
   /**
    * @param {number} type
-   * @param {object} extension
+   * @param {Extension[]?} extension
    */
   set(type, extension) {
     if (type < 0 || type > 127)
@@ -26,7 +28,7 @@ export class Extensions extends Map {
 
   /**
    * @param {number} type
-   * @param {object} extension
+   * @param {Extension[]?} extension
    */
   register(type, extension) {
     return this.set(type, extension);

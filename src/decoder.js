@@ -7,6 +7,9 @@ import { ExtData, Extensions } from './extensions.js';
 
 const textDecoder = new TextDecoder;
 
+/** @typedef {{ circular?:boolean, littleEndian?:boolean, extensions?:Extensions }} DecoderOptions */
+
+/** @param {DecoderOptions} options */
 const decoder = ({ circular, littleEndian, extensions }) => {
   /** @type {Map<number,any>} */
   const cache = new Map;
@@ -145,7 +148,7 @@ const decoder = ({ circular, littleEndian, extensions }) => {
     }
     else {
       const data = typed(bv, fixed ? uint(bv, /** @type {1 | 2 | 4} */(size)) : size);
-      const extension = extensions.get(type);
+      const extension = /** @type {Extensions} */(extensions).get(type);
       value = extension ? extension.decode(data, type) : new ExtData(type, data);
     }
     if (circular) cache.set(index, value);
@@ -238,6 +241,7 @@ const decoder = ({ circular, littleEndian, extensions }) => {
 };
 
 export default class Decoder {
+  /** @param {DecoderOptions} options */
   constructor({
     circular = true,
     littleEndian = false,
