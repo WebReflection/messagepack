@@ -3,13 +3,14 @@
 import { BetterView } from '@webreflection/magic-view';
 
 import { EXT_CIRCULAR, EXT_TIMESTAMP } from './builtins.js';
+import { ExtData, ExtRegistry } from './extensions.js';
 
 const textDecoder = new TextDecoder;
 
 export default function ({
   recursion = true,
   littleEndian = false,
-  extensions = new Map,
+  extensions = new ExtRegistry,
 } = {}) {
   /** @type {Map<number,any>} */
   const cache = new Map;
@@ -60,7 +61,7 @@ export default function ({
       case 0xcb: return read(bv.getFloat64(i, littleEndian), 8);
 
       // unsigned
-      case 0xcc: return bv.getUint8(i++);
+      case 0xcc: return uint(bv, 1);
       case 0xcd: return uint(bv, 2);
       case 0xce: return uint(bv, 4);
       case 0xcf: return big(bv, bv.getBigUint64);
@@ -72,7 +73,7 @@ export default function ({
       case 0xd3: return big(bv, bv.getBigInt64);
 
       // string
-      case 0xd9: return str(bv, bv.getUint8(i++));
+      case 0xd9: return str(bv, uint(bv, 1));
       case 0xda: return str(bv, uint(bv, 2));
       case 0xdb: return str(bv, uint(bv, 4));
 
@@ -85,22 +86,22 @@ export default function ({
       case 0xdf: return obj(bv, index, uint(bv, 4));
 
       // view
-      case 0xc4: return view(bv, index, bv.getUint8(i++));
+      case 0xc4: return view(bv, index, uint(bv, 1));
       case 0xc5: return view(bv, index, uint(bv, 2));
       case 0xc6: return view(bv, index, uint(bv, 4));
 
       // fixext
-      case 0xd4: return ext(bv, 1, true);
-      case 0xd5: return ext(bv, 2, true);
-      case 0xd6: return ext(bv, 4, true);
-      case 0xd7: return ext(bv, 8, true);
-      // case 0xd8: return extension(bv, 16, true);
+      case 0xd4: return ext(bv, index, 1, true);
+      case 0xd5: return ext(bv, index, 2, true);
+      case 0xd6: return ext(bv, index, 4, true);
+      case 0xd7: return ext(bv, index, 8, true);
+      // case 0xd8: return extension(bv, index, 16, true);
       // TODO: what are the use cases and why timestamp has 12?
 
       // ext
-      case 0xc7: return ext(bv, bv.getUint8(i++), false);
-      case 0xc8: return ext(bv, uint(bv, 2), false);
-      case 0xc9: return ext(bv, uint(bv, 4), false);
+      case 0xc7: return ext(bv, index, uint(bv, 1), false);
+      case 0xc8: return ext(bv, index, uint(bv, 2), false);
+      case 0xc9: return ext(bv, index, uint(bv, 4), false);
 
       // unknown
       default: err(type);
@@ -116,45 +117,43 @@ export default function ({
   /**
    * @template {boolean} F
    * @param {BetterView} bv
+   * @param {number} index
    * @param {number} size
    * @param {F} fixed
    * @returns
    */
-  const ext = (bv, size, fixed) => {
+  const ext = (bv, index, size, fixed) => {
     const type = bv.getInt8(i++);
-    if (fixed) {
-      switch (type) {
-        case EXT_CIRCULAR: {
-          const index = size < 2 ?
-            bv.getUint8(i++) :
-            uint(bv, /** @type {2 | 4} */(size))
-          ;
-          return cache.get(index);
+    if (type === EXT_CIRCULAR)
+      return cache.get(uint(bv, /** @type {1 | 2 | 4} */(size)));
+
+    let value;
+    if (type === EXT_TIMESTAMP) {
+      switch (size) {
+        case 4: {
+          value = new Date(uint(bv, size) * 1e3);
+          break;
         }
-        case EXT_TIMESTAMP: {
-          switch (size) {
-            case 4:
-              return new Date(uint(bv, size) * 1e3);
-            case 8: {
-              // (c) @msgpack/msgpack - https://github.com/msgpack/msgpack-javascript/blob/accf28769bce33507673723b10886783845ee430/src/timestamp.ts#L25-L34
-              const nsec30AndSecHigh2 = uint(bv, 4);
-              const secLow32 = uint(bv, 4);
-              const sec = (nsec30AndSecHigh2 & 0x3) * 0x100000000 + secLow32;
-              const nano = nsec30AndSecHigh2 >>> 2;
-              return new Date(sec * 1e3 + nano / 1e6);
-            }
-            // case 16: {}
-            // TODO: what are the use cases and why timestamp has 12?
-          }
+        case 8: {
+          // (c) @msgpack/msgpack - https://github.com/msgpack/msgpack-javascript/blob/accf28769bce33507673723b10886783845ee430/src/timestamp.ts#L25-L34
+          const nsec30AndSecHigh2 = uint(bv, 4);
+          const secLow32 = uint(bv, 4);
+          const sec = (nsec30AndSecHigh2 & 0x3) * 0x100000000 + secLow32;
+          const nano = nsec30AndSecHigh2 >>> 2;
+          value = new Date(sec * 1e3 + nano / 1e6);
+          break;
         }
+        case 16: err(type);
+        // TODO: what are the use cases and why timestamp has 12?
       }
     }
     else {
-      const data = read(bv.getTyped(i, size), size);
-      // TODO
-      return data;
+      const data = typed(bv, fixed ? uint(bv, /** @type {1 | 2 | 4} */(size)) : size);
+      const extension = extensions.get(type);
+      value = extension ? extension.decode(data, type) : new ExtData(type, data);
     }
-    err(type);
+    if (recursion) cache.set(index, value);
+    return value;
   };
 
   /**
@@ -194,14 +193,26 @@ export default function ({
 
   /**
    * @param {BetterView} bv
-   * @param {2 | 4} size
+   * @param {number} size
    * @returns
    */
-  const uint = (bv, size) => read(
-    size < 4 ?
-      bv.getUint16(i, littleEndian) :
-      bv.getUint32(i, littleEndian),
+  const typed = (bv, size) => read(
+    /** @type {Uint8Array} */(sub ? bv.getSub(i, size) : bv.getTyped(i, size)),
     size
+  );
+
+  /**
+   * @param {BetterView} bv
+   * @param {1 | 2 | 4} size
+   * @returns
+   */
+  const uint = (bv, size) => size < 2 ?
+    bv.getUint8(i++) :
+    read(
+      size < 4 ?
+        bv.getUint16(i, littleEndian) :
+        bv.getUint32(i, littleEndian),
+      size
   );
 
   /**
@@ -222,8 +233,8 @@ export default function ({
    */
   return ({ buffer }) => {
     i = 0;
-    //@ts-ignore - ⚠️ TextDecoder fails with subarray of a growable SharedArrayBuffer
-    sub = (buffer instanceof ArrayBuffer) || !buffer.growable;
+    //@ts-ignore - ⚠️ TextDecoder fails with SharedArrayBuffer
+    sub = buffer instanceof ArrayBuffer;
     const result = decode(new BetterView(buffer));
     cache.clear();
     return result;

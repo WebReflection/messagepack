@@ -3,9 +3,11 @@
 import { MagicView, BetterView } from '@webreflection/magic-view';
 
 import { EXT_CIRCULAR } from './builtins.js';
+import { ExtData, ExtRegistry } from './extensions.js';
 
 const { isArray } = Array;
 const { isView } = ArrayBuffer;
+const { floor } = Math;
 const { isSafeInteger } = Number;
 const { entries } = Object;
 
@@ -28,12 +30,20 @@ class Typed {
 export default function ({
   circular = true,
   littleEndian = false,
-  extensions = new Map,
+  extensions = new ExtRegistry,
   initialBufferSize = minimumBufferSize,
 } = { initialBufferSize: minimumBufferSize }) {
   const cache = /** @type {Map<any,Typed>} */(new Map);
   const mv = new MagicView(initialBufferSize);
   const bv = new BetterView(new ArrayBuffer(18));
+  const types = [];
+  const encoders = [];
+  for (const [type, { encoder }] of extensions) {
+    if (encoder) {
+      types.push(type);
+      encoders.push(encoder);
+    }
+  }
 
   /** @param {any[]} value */
   const arr = value => {
@@ -54,6 +64,68 @@ export default function ({
     for (let i = 0; i < length; i++) encode(value[i], true);
     //@ts-ignore and seriously: WTF!
     if (circular) typed.value = mv.getTyped(size, mv.size);
+  };
+
+  /**
+   * @param {any} value
+   * @param {number} index
+   * @returns
+   */
+  const circle = (value, index) => {
+    let size = 0;
+    bv.setInt8(1, EXT_CIRCULAR);
+    if (index < 0x100) {
+      bv.setUint8(0, 0xd4);
+      bv.setUint8(2, index);
+      size = 3;
+    }
+    else if (index < 0x10000) {
+      bv.setUint8(0, 0xd5);
+      bv.setUint16(2, index, littleEndian);
+      size = 4;
+    }
+    else {
+      bv.setUint8(0, 0xd6);
+      bv.setUint32(2, index, littleEndian);
+      size = 6;
+    }
+
+    const typed = new Typed(bv.getTyped(0, size));
+    cache.set(value, typed);
+    return typed;
+  };
+
+  /**
+   * @param {Date} value
+   */
+  const date = value => {
+    // (c) @msgpack/msgpack - https://github.com/msgpack/msgpack-javascript/blob/accf28769bce33507673723b10886783845ee430/src/timestamp.ts
+    const msec = value.getTime();
+    let sec = floor(msec / 1e3);
+    let nsec = (msec - sec * 1e3) * 1e6;
+    let time;
+
+    // Normalizes { sec, nsec } to ensure nsec is unsigned.
+    const nsecInSec = floor(nsec / 1e9);
+    sec += nsecInSec;
+    nsec -= nsecInSec * 1e9;
+    if (nsec === 0 && sec < 0x100000000) {
+      // timestamp 32 = { sec32 (unsigned) }
+      time = new Uint8Array(4);
+      const view = new DataView(time.buffer);
+      view.setUint32(0, sec);
+    } else {
+      // timestamp 64 = { nsec30 (unsigned), sec34 (unsigned) }
+      const secHigh = sec / 0x100000000;
+      const secLow = sec & 0xffffffff;
+      time = new Uint8Array(8);
+      const view = new DataView(time.buffer);
+      // nsec30 | secHigh2
+      view.setUint32(0, (nsec << 2) | (secHigh & 0x3));
+      // secLow32
+      view.setUint32(4, secLow);
+    }
+    ext(-1, time);
   };
 
   /** @param {any} value */
@@ -85,9 +157,19 @@ export default function ({
       case 'object': {
         if (value === null) nil();
         else if (notCached(value)) {
-          // TODO extensions in here
+          for (let i = 0; i < encoders.length; i++) {
+            const data = encoders[i](value);
+            if (data != null) {
+              ext(types[i], data);
+              return;
+            }
+          }
           if (isArray(value)) arr(value);
           else if (isView(value)) view(value);
+          else if (value instanceof Date) {
+            date(value);
+            return;
+          }
           else obj(value);
         }
         break;
@@ -97,6 +179,35 @@ export default function ({
         break;
       }
     }
+  };
+
+  /**
+   * @param {number} type
+   * @param {Uint8Array} data
+   */
+  const ext = (type, data) => {
+    const length = data.length;
+    if (length === 1)
+      mv.setU8(mv.size, 0xd4);
+    else if (length === 2)
+      mv.setU8(mv.size, 0xd5);
+    else if (length === 4)
+      mv.setU8(mv.size, 0xd6);
+    else if (length === 8)
+      mv.setU8(mv.size, 0xd7);
+    else if (length === 16)
+      mv.setU8(mv.size, 0xd8);
+    else if (length < 0x100)
+      mv.setArray(mv.size, [0xc7, length]);
+    else if (length < 0x10000) {
+      mv.setU8(mv.size, 0xc8);
+      mv.setUint16(mv.size, length);
+    } else if (length < 0x100000000) {
+      mv.setU8(mv.size, 0xc9);
+      mv.setUint32(mv.size, length);
+    }
+    mv.setInt8(mv.size, type);
+    mv.setTypedU8(mv.size, data);
   };
 
   const nil = () => {
@@ -198,35 +309,6 @@ export default function ({
     }
     //@ts-ignore and seriously: WTF!
     if (circular) typed.value = mv.getTyped(size, mv.size);
-  };
-
-  /**
-   * @param {any} value
-   * @param {number} index
-   * @returns
-   */
-  const circle = (value, index) => {
-    let size = 0;
-    bv.setInt8(1, EXT_CIRCULAR);
-    if (index < 0x100) {
-      bv.setUint8(0, 0xd4);
-      bv.setUint8(2, index);
-      size = 3;
-    }
-    else if (index < 0x10000) {
-      bv.setUint8(0, 0xd5);
-      bv.setUint16(2, index, littleEndian);
-      size = 4;
-    }
-    else {
-      bv.setUint8(0, 0xd6);
-      bv.setUint32(2, index, littleEndian);
-      size = 6;
-    }
-
-    const typed = new Typed(bv.getTyped(0, size));
-    cache.set(value, typed);
-    return typed;
   };
 
   /** @param {string} value */

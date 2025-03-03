@@ -50,6 +50,7 @@ assert(same(1.2), 'number 1.2');
 
 assert(same([1, 2, 3]), 'number[]');
 assert(same({ a: 1, b: 2, c: 3 }), 'object');
+assert(same(new Date), 'date');
 
 assert(same(new Uint8Array([1, 2, 3])), 'view<ui8>');
 assert(same(new Uint16Array([1, 2, 3])), 'view<ui16>');
