@@ -1,4 +1,5 @@
 {
+  "name": "@webreflection/messagepack",
   "type": "module",
   "scripts": {
     "test": "c8 node test/compare.js"

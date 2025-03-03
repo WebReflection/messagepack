@@ -3,7 +3,7 @@
 import { MagicView, BetterView } from '@webreflection/magic-view';
 
 import { EXT_CIRCULAR } from './builtins.js';
-import { ExtData, ExtRegistry } from './extensions.js';
+import { ExtData, Extensions } from './extensions.js';
 
 const { isArray } = Array;
 const { isView } = ArrayBuffer;
@@ -27,12 +27,7 @@ class Typed {
  * @param {object} options
  * @returns
  */
-export default function ({
-  circular = true,
-  littleEndian = false,
-  extensions = new ExtRegistry,
-  initialBufferSize = minimumBufferSize,
-} = { initialBufferSize: minimumBufferSize }) {
+const encoder = ({ circular, littleEndian, extensions, initialBufferSize }) => {
   const cache = /** @type {Map<any,Typed>} */(new Map);
   const mv = new MagicView(initialBufferSize);
   const bv = new BetterView(new ArrayBuffer(18));
@@ -377,3 +372,14 @@ export default function ({
     return mv.view;
   };
 };
+
+export default class Encoder {
+  constructor({
+    circular = true,
+    littleEndian = false,
+    extensions = new Extensions,
+    initialBufferSize = minimumBufferSize,
+  } = { initialBufferSize: minimumBufferSize }) {
+    this.encode = encoder({ circular, littleEndian, extensions, initialBufferSize });
+  }
+}

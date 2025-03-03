@@ -3,15 +3,11 @@
 import { BetterView } from '@webreflection/magic-view';
 
 import { EXT_CIRCULAR, EXT_TIMESTAMP } from './builtins.js';
-import { ExtData, ExtRegistry } from './extensions.js';
+import { ExtData, Extensions } from './extensions.js';
 
 const textDecoder = new TextDecoder;
 
-export default function ({
-  recursion = true,
-  littleEndian = false,
-  extensions = new ExtRegistry,
-} = {}) {
+const decoder = ({ circular, littleEndian, extensions }) => {
   /** @type {Map<number,any>} */
   const cache = new Map;
 
@@ -25,7 +21,7 @@ export default function ({
    */
   const arr = (bv, index, length) => {
     const value = [];
-    if (recursion) cache.set(index, value);
+    if (circular) cache.set(index, value);
     while (length--) value.push(decode(bv));
     return value;
   };
@@ -152,7 +148,7 @@ export default function ({
       const extension = extensions.get(type);
       value = extension ? extension.decode(data, type) : new ExtData(type, data);
     }
-    if (recursion) cache.set(index, value);
+    if (circular) cache.set(index, value);
     return value;
   };
 
@@ -164,7 +160,7 @@ export default function ({
    */
   const obj = (bv, index, pairs) => {
     const value = {};
-    if (recursion) cache.set(index, value);
+    if (circular) cache.set(index, value);
     while (pairs--) value[decode(bv)] = decode(bv);
     return value;
   };
@@ -223,7 +219,7 @@ export default function ({
    */
   const view = (bv, index, length) => {
     const value = read(bv.getTyped(i, length), length);
-    if (recursion) cache.set(index, value);
+    if (circular) cache.set(index, value);
     return value;
   };
 
@@ -240,3 +236,13 @@ export default function ({
     return result;
   };
 };
+
+export default class Decoder {
+  constructor({
+    circular = true,
+    littleEndian = false,
+    extensions = new Extensions,
+  } = {}) {
+    this.decode = decoder({ circular, littleEndian, extensions });
+  }
+}

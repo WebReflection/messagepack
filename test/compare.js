@@ -1,4 +1,4 @@
-import encoder from '../src/encoder.js';
+import { Encoder } from '../src/index.js';
 import { encode, decode } from '@msgpack/msgpack';
 
 const assert = (ok, message) => {
@@ -20,7 +20,7 @@ const same = value => {
   return result;
 };
 
-const local = encoder();
+const { encode: local } = new Encoder;
 
 assert(same(null), 'null');
 assert(same(true), 'true');

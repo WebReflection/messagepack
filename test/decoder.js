@@ -1,10 +1,9 @@
-import encoder from '../src/encoder.js';
-import decoder from '../src/decoder.js';
+import { Encoder, Decoder } from '../src/index.js';
 
 import * as messagepack from '@msgpack/msgpack';
 
-const encode = encoder();
-const decode = decoder();
+const { encode } = new Encoder;
+const { decode } = new Decoder;
 
 console.log(decode(encode(null)));
 console.log(decode(encode(true)));

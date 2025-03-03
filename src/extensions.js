@@ -13,7 +13,7 @@ export class ExtData {
   }
 }
 
-export class ExtRegistry extends Map {
+export class Extensions extends Map {
   /**
    * @param {number} type
    * @param {object} extension
