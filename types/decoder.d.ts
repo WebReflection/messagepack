@@ -1,7 +1,7 @@
 export default class Decoder {
     /** @param {DecoderOptions} options */
     constructor({ circular, littleEndian, extensions, }?: DecoderOptions);
-    decode: ({ buffer }: ArrayBufferView) => any;
+    decode: (view: ArrayBufferView) => any;
 }
 export type DecoderOptions = {
     circular?: boolean;

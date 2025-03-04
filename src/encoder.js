@@ -14,21 +14,12 @@ const { entries } = Object;
 const minimumBufferSize = 0xFFFF;
 const textEncoder = new TextEncoder;
 
-/** @template T */
-class Typed {
-  /** @param {T} value */
-  constructor(value) {
-    /** @type {T} */
-    this.value = value;
-  }
-}
-
 /**
  * @param {object} options
  * @returns
  */
 const encoder = ({ circular, littleEndian, extensions, initialBufferSize }) => {
-  const cache = /** @type {Map<any,Typed>} */(new Map);
+  const cache = /** @type {Map<any,Uint8Array>} */(new Map);
   const mv = new MagicView(initialBufferSize);
   const bv = new DataView(new ArrayBuffer(6));
   const types = [];
@@ -54,11 +45,8 @@ const encoder = ({ circular, littleEndian, extensions, initialBufferSize }) => {
       mv.setU8(size, 0xdd);
       mv.setUint32(size + 1, length, littleEndian);
     }
-    let typed;
-    if (circular) typed = circle(value, size);
+    if (circular) circle(value, size);
     for (let i = 0; i < length; i++) encode(value[i], true);
-    //@ts-ignore and seriously: WTF!
-    // if (circular) typed.value = mv.getTyped(size, mv.size);
   };
 
   /**
@@ -85,9 +73,7 @@ const encoder = ({ circular, littleEndian, extensions, initialBufferSize }) => {
       size = 6;
     }
 
-    const typed = new Typed(new Uint8Array(bv.buffer.slice(0, size)));
-    cache.set(value, typed);
-    return typed;
+    cache.set(value, new Uint8Array(bv.buffer.slice(0, size)));
   };
 
   /**
@@ -213,7 +199,7 @@ const encoder = ({ circular, littleEndian, extensions, initialBufferSize }) => {
   const notCached = value => {
     const typed = cache.get(value);
     if (typed) {
-      mv.setTypedU8(mv.size, typed.value);
+      mv.setTypedU8(mv.size, typed);
       return false;
     }
     return true;
@@ -293,15 +279,12 @@ const encoder = ({ circular, littleEndian, extensions, initialBufferSize }) => {
       mv.setU8(size, 0xdf);
       mv.setUint32(size + 1, length, littleEndian);
     }
-    let typed;
-    if (circular) typed = circle(value, size);
+    if (circular) circle(value, size);
     for (let i = 0; i < length; i++) {
       const pair = encoded[i];
       str(pair[0]);
       encode(pair[1]);
     }
-    //@ts-ignore and seriously: WTF!
-    // if (circular) typed.value = mv.getTyped(size, mv.size);
   };
 
   /** @param {string} value */
@@ -338,9 +321,9 @@ const encoder = ({ circular, littleEndian, extensions, initialBufferSize }) => {
 
   /** @param {ArrayBufferView} value */
   const view = value => {
-    let typed, size = mv.size, rsize = size;
+    let size = mv.size, rsize = size;
     const byteLength = value.byteLength;
-    if (circular) typed = circle(value, size);
+    if (circular) circle(value, size);
     if (byteLength < 0x100) {
       mv.setArray(size, [0xc4, byteLength]);
       size += 2;
@@ -356,8 +339,6 @@ const encoder = ({ circular, littleEndian, extensions, initialBufferSize }) => {
       size += 5;
     }
     mv.setTyped(size, value);
-    //@ts-ignore and seriously: WTF!
-    // if (circular) typed.value = mv.getTyped(rsize, mv.size);
   };
 
   /**

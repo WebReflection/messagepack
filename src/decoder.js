@@ -1,11 +1,22 @@
 //@ts-check
 
-import { BetterView } from '@webreflection/magic-view';
+// import { BetterView } from '@webreflection/magic-view';
 
 import { EXT_CIRCULAR, EXT_TIMESTAMP } from './builtins.js';
 import { ExtData, Extensions } from './extensions.js';
 
 const textDecoder = new TextDecoder;
+
+class BetterView extends DataView {
+  /**
+   * @param {number} byteOffset
+   * @param {number} size
+   * @returns {Uint8Array}
+   */
+  getTyped(byteOffset, size) {
+    return new Uint8Array(this.buffer.slice(byteOffset, byteOffset + size));
+  }
+}
 
 /** @typedef {{ circular?:boolean, littleEndian?:boolean, extensions?:Extensions }} DecoderOptions */
 
@@ -14,7 +25,10 @@ const decoder = ({ circular, littleEndian, extensions }) => {
   /** @type {Map<number,any>} */
   const cache = new Map;
 
-  let i = 0, sub = true;
+  let i = 0;
+
+  /** @type {Uint8Array?} */
+  let sub = null;
 
   /**
    * @param {BetterView} bv
@@ -183,9 +197,7 @@ const decoder = ({ circular, littleEndian, extensions }) => {
    * @returns
    */
   const str = (bv, length) => textDecoder.decode(
-    sub ?
-      read(bv.getSub(i, length), length) :
-      read(bv.getTyped(i, length), length)
+    read(subarray(bv, length), length)
   );
 
   /**
@@ -193,10 +205,16 @@ const decoder = ({ circular, littleEndian, extensions }) => {
    * @param {number} size
    * @returns
    */
-  const typed = (bv, size) => read(
-    /** @type {Uint8Array} */(sub ? bv.getSub(i, size) : bv.getTyped(i, size)),
-    size
+  const subarray = (bv, size) => /** @type {Uint8Array} */(
+    sub ? sub.subarray(i, i + size) : bv.getTyped(i, size)
   );
+
+  /**
+   * @param {BetterView} bv
+   * @param {number} size
+   * @returns
+   */
+  const typed = (bv, size) => read(subarray(bv, size), size);
 
   /**
    * @param {BetterView} bv
@@ -225,14 +243,14 @@ const decoder = ({ circular, littleEndian, extensions }) => {
   };
 
   /**
-   * @param {ArrayBufferView} value
+   * @param {ArrayBufferView} view
    * @returns
    */
-  return ({ buffer }) => {
+  return view => {
     i = 0;
-    //@ts-ignore - ⚠️ TextDecoder fails with SharedArrayBuffer
-    sub = buffer instanceof ArrayBuffer;
-    const result = decode(new BetterView(buffer));
+    // ⚠️ TextDecoder fails with SharedArrayBuffer
+    sub = view.buffer instanceof ArrayBuffer ? /** @type {Uint8Array} */(view) : null;
+    const result = decode(new BetterView(view.buffer));
     cache.clear();
     return result;
   };
