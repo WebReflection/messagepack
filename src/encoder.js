@@ -1,6 +1,7 @@
 //@ts-check
 
-import { MagicView } from '@webreflection/magic-view';
+import { MagicView } from './magic-view.js';
+import { stringBytes } from '@webreflection/magic-view';
 
 import { EXT_CIRCULAR } from './builtins.js';
 import { Extensions } from './extensions.js';
@@ -12,7 +13,6 @@ const { isSafeInteger } = Number;
 const { entries } = Object;
 
 const minimumBufferSize = 0xFFFF;
-const textEncoder = new TextEncoder;
 
 /**
  * @param {object} options
@@ -33,19 +33,18 @@ const encoder = ({ circular, littleEndian, extensions, initialBufferSize }) => {
 
   /** @param {any[]} value */
   const arr = value => {
-    const size = mv.size;
+    if (circular) circle(value, mv.byteLength);
     const length = value.length;
     if (length < 16)
-      mv.setU8(size, 0x90 + length);
+      mv.setU8(0x90 + length);
     else if (length < 0x10000) {
-      mv.setU8(size, 0xdc);
-      mv.setUint16(size + 1, length, littleEndian);
+      mv.setU8(0xdc);
+      mv.setUint16(length, littleEndian);
     }
     else {
-      mv.setU8(size, 0xdd);
-      mv.setUint32(size + 1, length, littleEndian);
+      mv.setU8(0xdd);
+      mv.setUint32(length, littleEndian);
     }
-    if (circular) circle(value, size);
     for (let i = 0; i < length; i++) encode(value[i], true);
   };
 
@@ -113,7 +112,7 @@ const encoder = ({ circular, littleEndian, extensions, initialBufferSize }) => {
   const encode = (value, nullify = false) => {
     switch (typeof value) {
       case 'boolean': {
-        mv.setU8(mv.size, value ? 0xc3 : 0xc2);
+        mv.setU8(value ? 0xc3 : 0xc2);
         break;
       }
       case 'number': {
@@ -126,12 +125,12 @@ const encoder = ({ circular, littleEndian, extensions, initialBufferSize }) => {
       }
       case 'bigint': {
         if (value >= 0n) {
-          mv.setU8(mv.size, 0xcf);
-          mv.setBigUint64(mv.size, value, littleEndian);
+          mv.setU8(0xcf);
+          mv.setBigUint64(value, littleEndian);
         }
         else {
-          mv.setU8(mv.size, 0xd3);
-          mv.setBigInt64(mv.size, value, littleEndian);
+          mv.setU8(0xd3);
+          mv.setBigInt64(value, littleEndian);
         }
         break;
       }
@@ -168,38 +167,37 @@ const encoder = ({ circular, littleEndian, extensions, initialBufferSize }) => {
    */
   const ext = (type, data) => {
     const length = data.length;
-    if (length === 1)
-      mv.setU8(mv.size, 0xd4);
-    else if (length === 2)
-      mv.setU8(mv.size, 0xd5);
-    else if (length === 4)
-      mv.setU8(mv.size, 0xd6);
-    else if (length === 8)
-      mv.setU8(mv.size, 0xd7);
-    else if (length === 16)
-      mv.setU8(mv.size, 0xd8);
-    else if (length < 0x100)
-      mv.setArray(mv.size, [0xc7, length]);
-    else if (length < 0x10000) {
-      mv.setU8(mv.size, 0xc8);
-      mv.setUint16(mv.size, length);
-    } else if (length < 0x100000000) {
-      mv.setU8(mv.size, 0xc9);
-      mv.setUint32(mv.size, length);
+    switch (length) {
+      case 1: mv.setU8(0xd4); break;
+      case 2: mv.setU8(0xd5); break;
+      case 4: mv.setU8(0xd6); break;
+      case 8: mv.setU8(0xd7); break;
+      case 16: mv.setU8(0xd8); break;
+      default: {
+        if (length < 0x100)
+          mv.setManyU8(0xc7, length);
+        else if (length < 0x10000) {
+          mv.setU8(0xc8);
+          mv.setUint16(length);
+        } else if (length < 0x100000000) {
+          mv.setU8(0xc9);
+          mv.setUint32(length);
+        }
+      }
     }
-    mv.setInt8(mv.size, type);
-    mv.setTypedU8(mv.size, data);
+    mv.setInt8(type);
+    mv.setTypedU8(data);
   };
 
   const nil = () => {
-    mv.setU8(mv.size, 0xc0);
+    mv.setU8(0xc0);
   };
 
   /** @param {any} value */
   const notCached = value => {
     const typed = cache.get(value);
     if (typed) {
-      mv.setTypedU8(mv.size, typed);
+      mv.setTypedU8(typed);
       return false;
     }
     return true;
@@ -207,50 +205,49 @@ const encoder = ({ circular, littleEndian, extensions, initialBufferSize }) => {
 
   /** @param {number} value */
   const num = value => {
-    const size = mv.size;
     if (isSafeInteger(value)) {
       if (value >= 0) {
         if (value < 0x80)
-          mv.setU8(size, value);
+          mv.setU8(value);
         else if (value < 0x100)
-          mv.setArray(size, [0xcc, value]);
+          mv.setManyU8(0xcc, value);
         else if (value < 0x10000) {
-          mv.setU8(size, 0xcd);
-          mv.setUint16(size + 1, value, littleEndian);
+          mv.setU8(0xcd);
+          mv.setUint16(value, littleEndian);
         }
         else if (value < 0x100000000) {
-          mv.setU8(size, 0xce);
-          mv.setUint32(size + 1, value, littleEndian);
+          mv.setU8(0xce);
+          mv.setUint32(value, littleEndian);
         }
         else {
-          mv.setU8(size, 0xcb);
-          mv.setFloat64(size + 1, value, littleEndian);
+          mv.setU8(0xcb);
+          mv.setFloat64(value, littleEndian);
         }
       }
       else {
         if (value >= -0x20)
-          mv.setU8(size, 0xe0 | (value + 0x20));
+          mv.setU8(0xe0 | (value + 0x20));
         else if (value >= -0x80) {
-          mv.setU8(size, 0xd0);
-          mv.setInt8(size + 1, value);
+          mv.setU8(0xd0);
+          mv.setInt8(value);
         }
         else if (value >= -0x8000) {
-          mv.setU8(size, 0xd1);
-          mv.setInt16(size + 1, value, littleEndian);
+          mv.setU8(0xd1);
+          mv.setInt16(value, littleEndian);
         }
         else if (value >= -0x80000000) {
-          mv.setU8(size, 0xd2);
-          mv.setInt32(size + 1, value, littleEndian);
+          mv.setU8(0xd2);
+          mv.setInt32(value, littleEndian);
         }
         else {
-          mv.setU8(size, 0xcb);
-          mv.setFloat64(size + 1, value, littleEndian);
+          mv.setU8(0xcb);
+          mv.setFloat64(value, littleEndian);
         }
       }
     }
     else {
-      mv.setU8(size, 0xcb);
-      mv.setFloat64(size + 1, value, littleEndian);
+      mv.setU8(0xcb);
+      mv.setFloat64(value, littleEndian);
     }
   };
 
@@ -267,19 +264,18 @@ const encoder = ({ circular, littleEndian, extensions, initialBufferSize }) => {
 
   /** @param {object} value */
   const obj = value => {
-    const size = mv.size;
+    if (circular) circle(value, mv.byteLength);
     const encoded = entries(value).filter(undesired);
     const length = encoded.length;
     if (length < 16)
-      mv.setU8(size, 0x80 + length);
+      mv.setU8(0x80 + length);
     else if (length < 0x10000) {
-      mv.setU8(size, 0xde);
-      mv.setUint16(size + 1, length, littleEndian);
+      mv.setU8(0xde);
+      mv.setUint16(length, littleEndian);
     } else {
-      mv.setU8(size, 0xdf);
-      mv.setUint32(size + 1, length, littleEndian);
+      mv.setU8(0xdf);
+      mv.setUint32(length, littleEndian);
     }
-    if (circular) circle(value, size);
     for (let i = 0; i < length; i++) {
       const pair = encoded[i];
       str(pair[0]);
@@ -297,48 +293,37 @@ const encoder = ({ circular, littleEndian, extensions, initialBufferSize }) => {
     //       https://es.discourse.group/t/string-bytelength-count/2315
     //       we have no way to just count or get the internal string size as buffer,
     //       for whatever reason that might be explained in the future in that TC39 topic.
-    const ui8a = textEncoder.encode(value);
-    const length = ui8a.length;
-    let size = mv.size;
-    if (length < 32)
-      mv.setU8(size++, 0xa0 + length);
-    else if (length < 0x100) {
-      mv.setArray(size, [0xd9, length]);
-      size += 2;
-    }
-    else if (length < 0x10000) {
-      mv.setU8(size, 0xda);
-      mv.setUint16(size + 1, length, littleEndian);
-      size += 3;
+    const bytes = stringBytes(value);
+    if (bytes < 32)
+      mv.setU8(0xa0 + bytes);
+    else if (bytes < 0x100)
+      mv.setManyU8(0xd9, bytes);
+    else if (bytes < 0x10000) {
+      mv.setU8(0xda);
+      mv.setUint16(bytes, littleEndian);
     }
     else {
-      mv.setU8(size, 0xdb);
-      mv.setUint32(size + 1, length, littleEndian);
-      size += 5;
+      mv.setU8(0xdb);
+      mv.setUint32(bytes, littleEndian);
     }
-    mv.setTypedU8(size, ui8a);
+    mv.setString(value, bytes);
   };
 
   /** @param {ArrayBufferView} value */
   const view = value => {
-    let size = mv.size, rsize = size;
     const byteLength = value.byteLength;
-    if (circular) circle(value, size);
-    if (byteLength < 0x100) {
-      mv.setArray(size, [0xc4, byteLength]);
-      size += 2;
-    }
+    if (circular) circle(value, mv.byteLength);
+    if (byteLength < 0x100)
+      mv.setManyU8(0xc4, byteLength);
     else if (byteLength < 0x10000) {
-      mv.setU8(size, 0xc5);
-      mv.setUint16(size + 1, byteLength, littleEndian);
-      size += 3;
+      mv.setU8(0xc5);
+      mv.setUint16(byteLength, littleEndian);
     }
     else {
-      mv.setU8(size, 0xc6);
-      mv.setUint32(size + 1, byteLength, littleEndian);
-      size += 5;
+      mv.setU8(0xc6);
+      mv.setUint32(byteLength, littleEndian);
     }
-    mv.setTyped(size, value);
+    mv.setTyped(value);
   };
 
   /**
@@ -347,7 +332,7 @@ const encoder = ({ circular, littleEndian, extensions, initialBufferSize }) => {
    */
   return value => {
     encode(value);
-    cache.clear();
+    if (circular) cache.clear();
     return mv.view;
   };
 };

@@ -1,7 +1,5 @@
 //@ts-check
 
-// import { BetterView } from '@webreflection/magic-view';
-
 import { EXT_CIRCULAR, EXT_TIMESTAMP } from './builtins.js';
 import { ExtData, Extensions } from './extensions.js';
 
