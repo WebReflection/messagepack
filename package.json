@@ -6,6 +6,25 @@
     "ts": "tsc --allowJs --checkJs --lib dom,esnext --target esnext --module nodenext -d --emitDeclarationOnly --outDir ./types ./src/index.js",
     "coverage": "mkdir -p ./coverage; c8 report --reporter=text-lcov > ./coverage/lcov.info"
   },
+  "exports": {
+    ".": {
+      "import": "./src/index.js",
+      "types": "./types/index.d.ts"
+    },
+    "./encoder": {
+      "import": "./src/encoder.js",
+      "types": "./types/encoder.d.ts"
+    },
+    "./decoder": {
+      "import": "./src/decoder.js",
+      "types": "./types/decoder.d.ts"
+    },
+    "./extensions": {
+      "import": "./src/extensions.js",
+      "types": "./types/extensions.d.ts"
+    },
+    "./package.json": "./package.json"
+  },
   "dependencies": {
     "@webreflection/magic-view": "^0.2.13"
   },
