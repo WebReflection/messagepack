@@ -1,9 +1,9 @@
 //@ts-check
 
-import { MagicView, BetterView } from '@webreflection/magic-view';
+import { MagicView } from '@webreflection/magic-view';
 
 import { EXT_CIRCULAR } from './builtins.js';
-import { ExtData, Extensions } from './extensions.js';
+import { Extensions } from './extensions.js';
 
 const { isArray } = Array;
 const { isView } = ArrayBuffer;
@@ -30,7 +30,7 @@ class Typed {
 const encoder = ({ circular, littleEndian, extensions, initialBufferSize }) => {
   const cache = /** @type {Map<any,Typed>} */(new Map);
   const mv = new MagicView(initialBufferSize);
-  const bv = new BetterView(new ArrayBuffer(18));
+  const bv = new DataView(new ArrayBuffer(6));
   const types = [];
   const encoders = [];
   for (const [type, { encoder }] of extensions) {
@@ -58,7 +58,7 @@ const encoder = ({ circular, littleEndian, extensions, initialBufferSize }) => {
     if (circular) typed = circle(value, size);
     for (let i = 0; i < length; i++) encode(value[i], true);
     //@ts-ignore and seriously: WTF!
-    if (circular) typed.value = mv.getTyped(size, mv.size);
+    // if (circular) typed.value = mv.getTyped(size, mv.size);
   };
 
   /**
@@ -85,7 +85,7 @@ const encoder = ({ circular, littleEndian, extensions, initialBufferSize }) => {
       size = 6;
     }
 
-    const typed = new Typed(bv.getTyped(0, size));
+    const typed = new Typed(new Uint8Array(bv.buffer.slice(0, size)));
     cache.set(value, typed);
     return typed;
   };
@@ -301,7 +301,7 @@ const encoder = ({ circular, littleEndian, extensions, initialBufferSize }) => {
       encode(pair[1]);
     }
     //@ts-ignore and seriously: WTF!
-    if (circular) typed.value = mv.getTyped(size, mv.size);
+    // if (circular) typed.value = mv.getTyped(size, mv.size);
   };
 
   /** @param {string} value */
@@ -357,7 +357,7 @@ const encoder = ({ circular, littleEndian, extensions, initialBufferSize }) => {
     }
     mv.setTyped(size, value);
     //@ts-ignore and seriously: WTF!
-    if (circular) typed.value = mv.getTyped(rsize, mv.size);
+    // if (circular) typed.value = mv.getTyped(rsize, mv.size);
   };
 
   /**

@@ -7,8 +7,9 @@ import data from './carts.json' with { type: 'json' };
 // --------------------------------------------------------------------
 
 const TIMES = 100;
-const circular = false;
+const circular = true;
 const hotcold = false;
+const runAll = false;
 
 // --------------------------------------------------------------------
 
@@ -41,14 +42,17 @@ const bench = (name, encode, decode) => {
     if (track && hotcold) console.timeEnd(i ? 'hot' : 'cold');
   }
   console.timeEnd('total');
+  console.log(encoded.length);
   console.log('');
+  if (sc.stringify(decoded) !== sc.stringify(data))
+    throw new Error(`${name} failed`);
 };
 
-bench('@ungap/structured-clone \x1b[4mstring\x1b[0m', sc.stringify, sc.parse);
-bench('@msgpack/msgpack', encode, decode);
+runAll && bench('@ungap/structured-clone \x1b[4mstring\x1b[0m', sc.stringify, sc.parse);
+runAll && bench('@msgpack/msgpack', encode, decode);
 bench('@webreflection/messagepack', encoder.encode, decoder.decode);
-bench('cbor2', cbor2.encode, cbor2.decode);
-bench('@ungap/structured-clone \x1b[4mview\x1b[0m', toView, fromView);
+runAll && bench('cbor2', cbor2.encode, cbor2.decode);
+runAll && bench('@ungap/structured-clone \x1b[4mview\x1b[0m', toView, fromView);
 
 if (circular) {
   console.log('⭕ \x1b[1mCIRCULAR DATA\x1b[0m');
@@ -56,10 +60,10 @@ if (circular) {
   data.recursive = data;
   data.carts.unshift(data);
   data.carts.push(data);
-  bench('@ungap/structured-clone string', sc.stringify, sc.parse);
+  runAll && bench('@ungap/structured-clone string', sc.stringify, sc.parse);
   bench('@webreflection/messagepack', encoder.encode, decoder.decode);
   try {
-    bench('@msgpack/msgpack', encode, decode);
+    runAll && bench('@msgpack/msgpack', encode, decode);
   }
   catch (_) {
     console.timeEnd('total');
@@ -67,12 +71,12 @@ if (circular) {
     console.log('');
   }
   try {
-    bench('cbor2', cbor2.encode, cbor2.decode);
+    runAll && bench('cbor2', cbor2.encode, cbor2.decode);
   }
   catch (_) {
     console.timeEnd('total');
     console.warn('\x1b[2m⚠️ cbor2 does not understand circular references\x1b[0m');
     console.log('');
   }
-  bench('@ungap/structured-clone view', toView, fromView);
+  runAll && bench('@ungap/structured-clone view', toView, fromView);
 }
