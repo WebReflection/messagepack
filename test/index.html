@@ -11,11 +11,10 @@
         }
     </script>
     <script type="module">
-        import encoder from '../src/encoder.js';
-        const encode = encoder();
+        import Encoder from '../src/encoder.js';
+        const { encode } = new Encoder();
         let a = [];
         a.push(a);
-        debugger;
         console.log(encode(a));
     </script>
 </head>

@@ -268,23 +268,21 @@ const encoder = ({ circular, littleEndian, extensions, initialBufferSize }) => {
     }
   };
 
+  const undesired = pair => {
+    switch (typeof pair[1]) {
+      case 'function':
+      case 'symbol':
+      case 'undefined':
+        return false;
+      default:
+        return true;
+    }
+  };
+
   /** @param {object} value */
   const obj = value => {
     const size = mv.size;
-    const pairs = entries(value);
-    const encoded = [];
-    for (let i = 0; i < pairs.length; i++) {
-      const pair = pairs[i];
-      switch (typeof pair[1]) {
-        case 'function':
-        case 'symbol':
-        case 'undefined':
-          break;
-        default:
-          encoded.push(pair);
-          break;
-      }
-    }
+    const encoded = entries(value).filter(undesired);
     const length = encoded.length;
     if (length < 16)
       mv.setU8(size, 0x80 + length);
@@ -298,9 +296,9 @@ const encoder = ({ circular, littleEndian, extensions, initialBufferSize }) => {
     let typed;
     if (circular) typed = circle(value, size);
     for (let i = 0; i < length; i++) {
-      const [key, value] = encoded[i];
-      str(key);
-      encode(value);
+      const pair = encoded[i];
+      str(pair[0]);
+      encode(pair[1]);
     }
     //@ts-ignore and seriously: WTF!
     if (circular) typed.value = mv.getTyped(size, mv.size);
