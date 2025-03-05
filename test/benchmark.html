@@ -8,10 +8,15 @@
             "imports": {
                 "@webreflection/magic-view": "../node_modules/@webreflection/magic-view/src/index.js",
                 "@msgpack/msgpack": "https://esm.run/@msgpack/msgpack",
+                "jspack": "../node_modules/jspack/src/index.js",
                 "@ungap/structured-clone/json": "https://esm.run/@ungap/structured-clone/json",
                 "cbor2": "https://esm.run/cbor2"
             }
         }
+    </script>
+    <script type="module">
+      import * as console from 'https:/esm.run/console-strings/browser';
+      Object.assign(globalThis.console, console);
     </script>
     <script type="module" src="benchmark.js"></script>
 </head>
